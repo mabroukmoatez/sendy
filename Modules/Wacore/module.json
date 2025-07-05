@@ -1,0 +1,92 @@
+{
+    "name": "Wacore",
+    "alias": "wacore",
+    "module_type": "features",
+    "module_key": "",
+    "description": "",
+    "modules_core_name": "Wacore",
+    "version": 1,
+    "status": true,
+    "status_updatable": false,
+    "keywords": [],
+    "priority": 0,
+    "user_menu": [
+        {
+            "name": "Tableau de bord",
+            "icon": "fi fi-rs-dashboard",
+            "route": "user.dashboard.index",
+            "route_type": "route",
+            "request": "user\/dashboard*"
+        },
+        {
+            "name": "Envoyer un message",
+            "icon": "fi fi-rs-paper-plane",
+            "route": "#",
+            "route_type": "url",
+            "request": "\/user\/sent-text-message*|\/user\/bulk-message*|\/user\/schedule-message*",
+            "children": [
+                {
+                    "name": "Envoi unique",
+                    "icon": "fi fi-rs-paper-plane",
+                    "route": "user\/sent-text-message",
+                    "route_type": "url",
+                    "request": "user\/sent-text-message*"
+                },
+                {
+                    "name": "Envoi en masse",
+                    "icon": "fi fi-rs-rocket-lunch",
+                    "route": "user\/bulk-message",
+                    "route_type": "url",
+                    "request": "user\/bulk-message*"
+                },
+                {
+                    "name": "Message programmé",
+                    "icon": "ni ni-calendar-grid-58",
+                    "route": "user\/schedule-message\/create",
+                    "route_type": "url",
+                    "request": "user\/schedule-message*"
+                }
+            ]
+        },
+        {
+            "name": "Carnet de contacts",
+            "icon": "fi  fi-rs-address-book",
+            "route": "user\/contact",
+            "route_type": "url",
+            "request": "user\/contact*"
+        },
+        {
+            "name": "Groupes",
+            "icon": "fas fa-users",
+            "route": "user.group.index",
+            "route_type": "route",
+            "request": "user/group*"
+        },
+        {
+            "name": "Modèles",
+            "icon": "fi  fi-rs-template-alt",
+            "route": "user\/template",
+            "route_type": "url",
+            "request": "user\/template*"
+        },
+        {
+            "name": "Mes appareils",
+            "icon": "fi-rs-sensor-on",
+            "route": "user.device.index",
+            "route_type": "route",
+            "request": "user\/device*"
+        },
+        {
+            "name": "Journal des messages",
+            "icon": "ni ni-ui-04",
+            "route": "user\/logs",
+            "route_type": "url",
+            "request": "user\/logs*"
+        }
+    ],
+    "admin_menu": [],
+    "providers": [
+        "Modules\\Wacore\\Providers\\WacoreServiceProvider"
+    ],
+    "files": []
+}

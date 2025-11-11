@@ -90,12 +90,16 @@ const createSession = async (sessionId, isLegacy = false, res = null) => {
         ;({ state, saveCreds: saveState } = await useMultiFileAuthState(sessionsDir(sessionFile)))
     }
 
+    // Fetch the latest Baileys version to ensure compatibility with WhatsApp servers
+    const { version, isLatest } = await fetchLatestBaileysVersion();
+    console.log(`Using WhatsApp version ${version.join('.')}, isLatest: ${isLatest}`);
+
     /**
      * @type {import('@whiskeysockets/baileys').CommonSocketConfig}
      */
     const waConfig = {
         auth: state,
-        version: [2, 3000, 1023249347], // Baileys version, often updated by fetchLatestBaileysVersion()
+        version, // Use dynamically fetched version instead of hardcoded
         printQRInTerminal: false,
         logger,
         browser: Browsers.ubuntu('Chrome'), // Sets user agent to Chrome on Ubuntu

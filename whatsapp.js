@@ -103,6 +103,9 @@ const createSession = async (sessionId, isLegacy = false, res = null) => {
         printQRInTerminal: false,
         logger,
         browser: Browsers.ubuntu('Chrome'), // Sets user agent to Chrome on Ubuntu
+        keepAliveIntervalMs: 30000, // Send keepalive pings every 30 seconds to prevent timeout
+        syncFullHistory: false, // Don't sync full history to reduce initial load
+        markOnlineOnConnect: true, // Mark as online when connecting
         patchMessageBeforeSending: (message) => {
                 const requiresPatch = !!(
                      message.buttonsMessage ||
@@ -134,9 +137,21 @@ const createSession = async (sessionId, isLegacy = false, res = null) => {
     if (!isLegacy) {
         store.readFromFile(sessionsDir(`${sessionId}_store.json`)) // Reads chat/contact/message history from file
         store.bind(wa.ev) // Binds the in-memory store to Baileys events for updates
-    }
 
-    sessions.set(sessionId, { ...wa, store, isLegacy })
+        // Save store periodically to prevent data loss
+        const storeInterval = setInterval(() => {
+            try {
+                store.writeToFile(sessionsDir(`${sessionId}_store.json`));
+            } catch (err) {
+                console.error(`Error in periodic store save for session ${sessionId}:`, err);
+            }
+        }, 60000); // Save every 60 seconds
+
+        // Store the interval reference so we can clear it later
+        sessions.set(sessionId, { ...wa, store, isLegacy, storeInterval });
+    } else {
+        sessions.set(sessionId, { ...wa, store, isLegacy });
+    }
 
     wa.ev.on('creds.update', saveState) // Saves authentication credentials
 
@@ -184,15 +199,38 @@ const createSession = async (sessionId, isLegacy = false, res = null) => {
         const { connection, lastDisconnect, qr } = update; // Destructure qr directly
         const statusCode = lastDisconnect?.error?.output?.statusCode;
 
+        if (connection === 'connecting') {
+            console.log(`Session ${sessionId} is connecting...`);
+        }
+
         if (connection === 'open') {
             retries.delete(sessionId);
             setDeviceStatus(sessionId, 1); // Set status to connected
-            console.log(`Session ${sessionId} opened.`);
+            console.log(`Session ${sessionId} opened successfully.`);
+
+            // Save store to persist connection state
+            if (!isLegacy && store) {
+                try {
+                    store.writeToFile(sessionsDir(`${sessionId}_store.json`));
+                } catch (err) {
+                    console.error(`Error saving store for session ${sessionId}:`, err);
+                }
+            }
         }
 
         if (connection === 'close') {
             setDeviceStatus(sessionId, 0); // Set status to disconnected
             console.log(`Session ${sessionId} closed. Reason: ${DisconnectReason[statusCode] || statusCode}`);
+
+            // Clear the periodic store save interval if it exists
+            const existingSession = sessions.get(sessionId);
+            if (existingSession && existingSession.storeInterval) {
+                clearInterval(existingSession.storeInterval);
+            }
+
+            // Remove the old session from memory before attempting to reconnect
+            sessions.delete(sessionId);
+
             if (statusCode === DisconnectReason.loggedOut || !shouldReconnect(sessionId)) {
                 if (res && !res.headersSent) {
                     response(res, 500, false, 'Unable to create session or session logged out.')
@@ -204,7 +242,7 @@ const createSession = async (sessionId, isLegacy = false, res = null) => {
             setTimeout(
                 () => {
                     console.log(`Attempting to reconnect session ${sessionId}...`);
-                    createSession(sessionId, isLegacy, res);
+                    createSession(sessionId, isLegacy, null); // Pass null for res to avoid duplicate responses
                 },
                 statusCode === DisconnectReason.restartRequired ? 0 : parseInt(process.env.RECONNECT_INTERVAL ?? 5000) // Default 5s reconnect
             );
@@ -243,15 +281,23 @@ const deleteSession = (sessionId, isLegacy = false) => {
 
     // Attempt to close the WhatsApp connection gracefully before deleting files
     const session = sessions.get(sessionId);
-    if (session && session.ws && session.ws.readyState === session.ws.OPEN) {
-        console.log(`Closing WebSocket for session ${sessionId} before deletion.`);
-        try {
-            session.logout(); // Attempt to log out gracefully
-        } catch (e) {
-            console.error(`Error logging out session ${sessionId}:`, e);
+    if (session) {
+        // Clear the periodic store save interval if it exists
+        if (session.storeInterval) {
+            clearInterval(session.storeInterval);
+            console.log(`Cleared store interval for session ${sessionId}`);
+        }
+
+        if (session.ws && session.ws.readyState === session.ws.OPEN) {
+            console.log(`Closing WebSocket for session ${sessionId} before deletion.`);
+            try {
+                session.logout(); // Attempt to log out gracefully
+            } catch (e) {
+                console.error(`Error logging out session ${sessionId}:`, e);
+            }
         }
     }
-    
+
     // Remove session directory for multi-file auth
     rmSync(sessionDir, { force: true, recursive: true });
     // Remove the in-memory store file
